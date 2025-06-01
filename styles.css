@@ -548,4 +548,37 @@ html[dark] .sauce-video-timestamp {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.sauce-timestamp-error {
+    display: none;
+    color: #cc0000;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(204, 0, 0, 0.1);
+}
+
+html[dark] .sauce-timestamp-error {
+    color: #ff4e45;
+    background-color: rgba(255, 78, 69, 0.1);
+}
+
+.sauce-input-error {
+    border-color: #cc0000 !important;
+    background-color: rgba(204, 0, 0, 0.05) !important;
+}
+
+html[dark] .sauce-input-error {
+    border-color: #ff4e45 !important;
+    background-color: rgba(255, 78, 69, 0.05) !important;
+}
+
+.sauce-input-error:focus {
+    border-color: #cc0000 !important;
+}
+
+html[dark] .sauce-input-error:focus {
+    border-color: #ff4e45 !important;
 } 

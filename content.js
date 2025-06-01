@@ -94,6 +94,138 @@ function updateSourceCount() {
     });
 }
 
+// Function to validate and format timestamp
+function validateTimestamp(input) {
+    // Remove any whitespace
+    input = input.trim();
+    
+    if (input === '') return { isValid: true, value: '' };
+
+    // Match different timestamp formats: HH:MM:SS, MM:SS, or SS
+    const timeFormats = [
+        /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/, // HH:MM:SS
+        /^(\d{1,2}):(\d{1,2})$/,           // MM:SS
+        /^(\d{1,2})$/                       // SS
+    ];
+
+    let hours = 0, minutes = 0, seconds = 0;
+
+    // Try each format
+    for (let format of timeFormats) {
+        const match = input.match(format);
+        if (match) {
+            if (match.length === 4) { // HH:MM:SS
+                hours = parseInt(match[1]);
+                minutes = parseInt(match[2]);
+                seconds = parseInt(match[3]);
+            } else if (match.length === 3) { // MM:SS
+                minutes = parseInt(match[1]);
+                seconds = parseInt(match[2]);
+            } else if (match.length === 2) { // SS
+                seconds = parseInt(match[1]);
+            }
+
+            // Validate ranges
+            if (hours > 23 || minutes > 59 || seconds > 59) {
+                return {
+                    isValid: false,
+                    error: 'Invalid time values. Hours must be 0-23, minutes and seconds must be 0-59.'
+                };
+            }
+
+            // Format the timestamp consistently
+            let formattedTime = '';
+            if (hours > 0) {
+                formattedTime = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            return { isValid: true, value: formattedTime };
+        }
+    }
+
+    return {
+        isValid: false,
+        error: 'Invalid format. Use HH:MM:SS, MM:SS, or SS'
+    };
+}
+
+// Function to validate timestamp range
+function validateTimestampRange(fromTime, toTime) {
+    if (!fromTime && !toTime) return true;
+
+    const from = fromTime ? convertTimestampToSeconds(fromTime) : 0;
+    const to = toTime ? convertTimestampToSeconds(toTime) : Infinity;
+
+    return from <= to;
+}
+
+// Function to convert timestamp to seconds
+function convertTimestampToSeconds(timestamp) {
+    if (!timestamp) return 0;
+    
+    const parts = timestamp.split(':').map(Number);
+    if (parts.length === 3) { // HH:MM:SS
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) { // MM:SS
+        return parts[0] * 60 + parts[1];
+    } else { // SS
+        return parts[0];
+    }
+}
+
+// Add input validation to timestamp fields
+function addTimestampValidation(index) {
+    const fromInput = document.getElementById(`source-timestamp-from-${index}`);
+    const toInput = document.getElementById(`source-timestamp-to-${index}`);
+    const errorDisplay = document.createElement('div');
+    errorDisplay.className = 'sauce-timestamp-error';
+    fromInput.parentNode.appendChild(errorDisplay);
+
+    function validateAndUpdateTimestamp(input) {
+        const result = validateTimestamp(input.value);
+        const otherInput = input === fromInput ? toInput : fromInput;
+        
+        // Clear previous error state
+        input.classList.remove('sauce-input-error');
+        errorDisplay.textContent = '';
+        errorDisplay.style.display = 'none';
+
+        if (!result.isValid) {
+            input.classList.add('sauce-input-error');
+            errorDisplay.textContent = result.error;
+            errorDisplay.style.display = 'block';
+            return false;
+        }
+
+        // Update input with formatted value
+        input.value = result.value;
+
+        // Validate range if both inputs have values
+        if (input.value && otherInput.value) {
+            const isValidRange = validateTimestampRange(fromInput.value, toInput.value);
+            if (!isValidRange) {
+                input.classList.add('sauce-input-error');
+                otherInput.classList.add('sauce-input-error');
+                errorDisplay.textContent = 'End time must be after start time';
+                errorDisplay.style.display = 'block';
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Add validation on input
+    fromInput.addEventListener('input', () => validateAndUpdateTimestamp(fromInput));
+    toInput.addEventListener('input', () => validateAndUpdateTimestamp(toInput));
+
+    // Add validation on blur (when input loses focus)
+    fromInput.addEventListener('blur', () => validateAndUpdateTimestamp(fromInput));
+    toInput.addEventListener('blur', () => validateAndUpdateTimestamp(toInput));
+}
+
 // Function to create a source input group
 function createSourceInputGroup(index, container) {
     const group = document.createElement('div');
@@ -146,6 +278,7 @@ Rumble: https://rumble.com/..."></textarea>
         </div>
     `;
     container.appendChild(group);
+    addTimestampValidation(index);
 }
 
 // Function to fetch and format current video timestamp
@@ -250,6 +383,33 @@ function submitSource() {
     const form = document.querySelector('.sauce-submit-form');
     const sourceGroups = form.getElementsByClassName('sauce-source-group');
     const sources = [];
+
+    // Validate all timestamps before submitting
+    let hasValidationErrors = false;
+    for (const group of sourceGroups) {
+        const fromInput = group.querySelector(`input[id^="source-timestamp-from"]`);
+        const toInput = group.querySelector(`input[id^="source-timestamp-to"]`);
+
+        if (fromInput.value || toInput.value) {
+            const fromResult = validateTimestamp(fromInput.value);
+            const toResult = validateTimestamp(toInput.value);
+
+            if (!fromResult.isValid || !toResult.isValid) {
+                hasValidationErrors = true;
+                break;
+            }
+
+            if (!validateTimestampRange(fromResult.value, toResult.value)) {
+                hasValidationErrors = true;
+                break;
+            }
+        }
+    }
+
+    if (hasValidationErrors) {
+        alert('Please fix the timestamp validation errors before submitting.');
+        return;
+    }
 
     // Collect all source data
     for (const group of sourceGroups) {
