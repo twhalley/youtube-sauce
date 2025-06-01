@@ -117,10 +117,20 @@ Odysee: https://odysee.com/@channel/...
 Rumble: https://rumble.com/..."></textarea>
         </div>
         <div class="sauce-input-group">
-            <label for="source-timestamp-${index}">Timestamp in Current Video</label>
+            <label>Timestamp Range in Current Video</label>
             <div class="sauce-timestamp-container">
-                <input type="text" id="source-timestamp-${index}" class="sauce-timestamp-input" placeholder="e.g., 2:30 or leave empty if not applicable">
-                <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp(${index})">Get Current Time</button>
+                <div class="sauce-timestamp-range">
+                    <div class="sauce-timestamp-field">
+                        <label for="source-timestamp-from-${index}">From:</label>
+                        <input type="text" id="source-timestamp-from-${index}" class="sauce-timestamp-input" placeholder="0:00">
+                        <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp('from', ${index})">Get Current</button>
+                    </div>
+                    <div class="sauce-timestamp-field">
+                        <label for="source-timestamp-to-${index}">To:</label>
+                        <input type="text" id="source-timestamp-to-${index}" class="sauce-timestamp-input" placeholder="0:00">
+                        <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp('to', ${index})">Get Current</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="sauce-input-group">
@@ -139,8 +149,9 @@ Rumble: https://rumble.com/..."></textarea>
 }
 
 // Function to fetch and format current video timestamp
-function fetchCurrentTimestamp(index) {
-    const video = document.querySelector('video');
+function fetchCurrentTimestamp(type, index) {
+    // Find the YouTube video player
+    const video = document.querySelector('#movie_player video');
     if (video) {
         const time = Math.floor(video.currentTime);
         const hours = Math.floor(time / 3600);
@@ -154,7 +165,7 @@ function fetchCurrentTimestamp(index) {
             timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
         
-        const timestampInput = document.getElementById(`source-timestamp-${index}`);
+        const timestampInput = document.getElementById(`source-timestamp-${type}-${index}`);
         if (timestampInput) {
             timestampInput.value = timestamp;
         }
@@ -243,13 +254,15 @@ function submitSource() {
     // Collect all source data
     for (const group of sourceGroups) {
         const urlInput = group.querySelector('.sauce-url-input');
-        const timestampInput = group.querySelector('.sauce-timestamp-input');
+        const timestampFromInput = group.querySelector(`input[id^="source-timestamp-from"]`);
+        const timestampToInput = group.querySelector(`input[id^="source-timestamp-to"]`);
         const descInput = group.querySelector('.sauce-description-input');
         
         if (urlInput.value.trim() && descInput.value.trim()) {
             sources.push({
                 url: urlInput.value.trim(),
-                timestamp: timestampInput.value.trim(),
+                timestampFrom: timestampFromInput.value.trim(),
+                timestampTo: timestampToInput.value.trim(),
                 description: descInput.value.trim(),
                 submitTime: new Date().toISOString()
             });
@@ -291,15 +304,28 @@ function loadSources() {
         if (sources.length === 0) {
             dropdownContent.innerHTML = '<p class="no-sources">No sources found. Be the first to add one!</p>';
         } else {
-            dropdownContent.innerHTML = sources.map(source => `
-                <div class="sauce-item">
-                    <div class="sauce-item-content">
-                        <a href="${source.url}" target="_blank">${source.description}</a>
-                        ${source.timestamp ? `<span class="sauce-video-timestamp">at ${source.timestamp}</span>` : ''}
+            dropdownContent.innerHTML = sources.map(source => {
+                let timestampText = '';
+                if (source.timestampFrom || source.timestampTo) {
+                    if (source.timestampFrom && source.timestampTo) {
+                        timestampText = `<span class="sauce-video-timestamp">at ${source.timestampFrom} - ${source.timestampTo}</span>`;
+                    } else if (source.timestampFrom) {
+                        timestampText = `<span class="sauce-video-timestamp">from ${source.timestampFrom}</span>`;
+                    } else if (source.timestampTo) {
+                        timestampText = `<span class="sauce-video-timestamp">until ${source.timestampTo}</span>`;
+                    }
+                }
+                
+                return `
+                    <div class="sauce-item">
+                        <div class="sauce-item-content">
+                            <a href="${source.url}" target="_blank">${source.description}</a>
+                            ${timestampText}
+                        </div>
+                        <span class="sauce-timestamp">${new Date(source.submitTime).toLocaleDateString()}</span>
                     </div>
-                    <span class="sauce-timestamp">${new Date(source.submitTime).toLocaleDateString()}</span>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
         
         // Update the source count after loading
