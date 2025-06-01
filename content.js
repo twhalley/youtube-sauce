@@ -177,7 +177,7 @@ function convertTimestampToSeconds(timestamp) {
     }
 }
 
-// Function to set timestamp from current video time
+// Function to handle timestamp locking/unlocking
 function setTimestamp(type, index) {
     console.log('setTimestamp called with:', type, index);
     
@@ -189,12 +189,28 @@ function setTimestamp(type, index) {
         return;
     }
 
+    // Find the button that was clicked
+    const button = document.querySelector(`.sauce-set-timestamp[data-type="${type}"][data-index="${index}"]`);
+    if (!button) {
+        console.error('Could not find button');
+        return;
+    }
+
     // Find the error display element within the timestamp container
     const timestampContainer = timestampInput.closest('.sauce-timestamp-container');
     const errorDisplay = timestampContainer ? timestampContainer.nextElementSibling : null;
     
     if (!errorDisplay || !errorDisplay.classList.contains('sauce-timestamp-error')) {
         console.error('Could not find error display element');
+        return;
+    }
+
+    // Check if we're unlocking
+    if (button.textContent === 'Unlock') {
+        // Unlock the input
+        timestampInput.removeAttribute('readonly');
+        timestampInput.classList.remove('sauce-timestamp-set');
+        button.textContent = 'Lock';
         return;
     }
     
@@ -245,6 +261,7 @@ function setTimestamp(type, index) {
     timestampInput.value = result.value;
     timestampInput.setAttribute('readonly', '');
     timestampInput.classList.add('sauce-timestamp-set');
+    button.textContent = 'Unlock';
     console.log('Timestamp set and locked:', result.value);
 }
 
