@@ -105,14 +105,60 @@ function createSourceInputGroup(index, container) {
         </div>
         <div class="sauce-input-group">
             <label for="source-url-${index}">Original URL</label>
-            <input type="text" id="source-url-${index}" class="sauce-url-input" placeholder="https://www.youtube.com/watch?v=... https://archive.is/ or https://kiwifarms.st/ etc ...">
+            <textarea id="source-url-${index}" class="sauce-url-input" rows="8" placeholder="Paste your source URL here. Examples:
+
+YouTube: https://www.youtube.com/watch?v=...
+Twitter/X: https://twitter.com/username/status/...
+Nitter: https://nitter.net/username/status/...
+Reddit: https://reddit.com/r/subreddit/comments/...
+Archive.is: https://archive.is/...
+Web Archive: https://web.archive.org/web/...
+Odysee: https://odysee.com/@channel/...
+Rumble: https://rumble.com/..."></textarea>
+        </div>
+        <div class="sauce-input-group">
+            <label for="source-timestamp-${index}">Timestamp in Current Video</label>
+            <div class="sauce-timestamp-container">
+                <input type="text" id="source-timestamp-${index}" class="sauce-timestamp-input" placeholder="e.g., 2:30 or leave empty if not applicable">
+                <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp(${index})">Get Current Time</button>
+            </div>
         </div>
         <div class="sauce-input-group">
             <label for="source-description-${index}">Description</label>
-            <input type="text" id="source-description-${index}" class="sauce-description-input" placeholder="Brief description of the original content, this can also include other links to the original content for example https://archive.is/ or https://kiwifarms.st/">
+            <textarea id="source-description-${index}" class="sauce-description-input" rows="6" placeholder="Describe the source content. Examples:
+
+- Original video before it was deleted/edited
+- Mirror of the deleted content
+- Archive of the original post/thread
+- Reddit discussion about the topic
+- News article covering the event
+- Original social media post"></textarea>
         </div>
     `;
     container.appendChild(group);
+}
+
+// Function to fetch and format current video timestamp
+function fetchCurrentTimestamp(index) {
+    const video = document.querySelector('video');
+    if (video) {
+        const time = Math.floor(video.currentTime);
+        const hours = Math.floor(time / 3600);
+        const minutes = Math.floor((time % 3600) / 60);
+        const seconds = time % 60;
+        
+        let timestamp = '';
+        if (hours > 0) {
+            timestamp = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        const timestampInput = document.getElementById(`source-timestamp-${index}`);
+        if (timestampInput) {
+            timestampInput.value = timestamp;
+        }
+    }
 }
 
 // Function to show the submit form
@@ -197,13 +243,15 @@ function submitSource() {
     // Collect all source data
     for (const group of sourceGroups) {
         const urlInput = group.querySelector('.sauce-url-input');
+        const timestampInput = group.querySelector('.sauce-timestamp-input');
         const descInput = group.querySelector('.sauce-description-input');
         
         if (urlInput.value.trim() && descInput.value.trim()) {
             sources.push({
                 url: urlInput.value.trim(),
+                timestamp: timestampInput.value.trim(),
                 description: descInput.value.trim(),
-                timestamp: new Date().toISOString()
+                submitTime: new Date().toISOString()
             });
         }
     }
@@ -245,8 +293,11 @@ function loadSources() {
         } else {
             dropdownContent.innerHTML = sources.map(source => `
                 <div class="sauce-item">
-                    <a href="${source.url}" target="_blank">${source.description}</a>
-                    <span class="sauce-timestamp">${new Date(source.timestamp).toLocaleDateString()}</span>
+                    <div class="sauce-item-content">
+                        <a href="${source.url}" target="_blank">${source.description}</a>
+                        ${source.timestamp ? `<span class="sauce-video-timestamp">at ${source.timestamp}</span>` : ''}
+                    </div>
+                    <span class="sauce-timestamp">${new Date(source.submitTime).toLocaleDateString()}</span>
                 </div>
             `).join('');
         }
@@ -276,6 +327,7 @@ function observeThemeChanges() {
 // Make functions available globally
 window.addNewSourceGroup = addNewSourceGroup;
 window.submitSource = submitSource;
+window.fetchCurrentTimestamp = fetchCurrentTimestamp;
 
 // Initialize when the page loads
 document.addEventListener('yt-navigate-finish', createSauceMenu);

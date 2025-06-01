@@ -138,7 +138,7 @@ html[dark] .sauce-timestamp {
     left: 0;
     max-width: 100vw;
     width: 500px;
-    max-height: 80vh;
+    max-height: 90vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -309,6 +309,55 @@ html[dark] .sauce-input-group input:focus {
     border-color: #3ea6ff;
 }
 
+.sauce-input-group textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d3d3d3;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: white;
+    color: #030303;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 36px;
+    overflow-y: auto;
+}
+
+.sauce-url-input {
+    height: 250px; /* Increased height to show all URL examples */
+}
+
+.sauce-description-input {
+    height: 180px; /* Increased height to show all description examples */
+}
+
+html[dark] .sauce-input-group textarea {
+    background-color: #1f1f1f;
+    border-color: #404040;
+    color: #fff;
+}
+
+.sauce-input-group textarea:focus {
+    border-color: #065fd4;
+    outline: none;
+}
+
+html[dark] .sauce-input-group textarea:focus {
+    border-color: #3ea6ff;
+}
+
+.sauce-input-group textarea::placeholder {
+    color: #606060;
+    opacity: 0.8;
+    white-space: pre-line; /* Preserve line breaks in placeholder */
+}
+
+html[dark] .sauce-input-group textarea::placeholder {
+    color: #aaa;
+}
+
 .sauce-form-buttons {
     display: flex;
     justify-content: flex-end;
@@ -383,10 +432,95 @@ html[dark] .no-sources {
         width: calc(100vw - 32px);
         margin: 8px 16px;
         left: 0;
-        max-height: 90vh;
+        max-height: 95vh;
     }
 
     .sauce-submit-form-content {
         padding: 16px;
     }
+}
+
+.sauce-timestamp-container {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.sauce-timestamp-input {
+    flex: 1;
+    box-sizing: border-box;
+    border: 1px solid #d3d3d3;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: white;
+    color: #030303;
+    font-family: inherit;
+    height: 36px;
+}
+
+html[dark] .sauce-timestamp-input {
+    background-color: #1f1f1f;
+    border-color: #404040;
+    color: #fff;
+}
+
+.sauce-timestamp-input:focus {
+    border-color: #065fd4;
+    outline: none;
+}
+
+html[dark] .sauce-timestamp-input:focus {
+    border-color: #3ea6ff;
+}
+
+.sauce-fetch-timestamp {
+    background-color: #065fd4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    height: 36px;
+    white-space: nowrap;
+}
+
+html[dark] .sauce-fetch-timestamp {
+    background-color: #3ea6ff;
+}
+
+.sauce-fetch-timestamp:hover {
+    background-color: #0356c6;
+}
+
+html[dark] .sauce-fetch-timestamp:hover {
+    background-color: #65b8ff;
+}
+
+.sauce-video-timestamp {
+    color: #606060;
+    font-size: 13px;
+    margin-left: 8px;
+}
+
+html[dark] .sauce-video-timestamp {
+    color: #aaa;
+}
+
+.sauce-item-content {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.sauce-item-content a {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 } 
