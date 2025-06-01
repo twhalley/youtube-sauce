@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: youtube-sauce
+  labels:
+    app: youtube-sauce
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: youtube-sauce
+  template:
+    metadata:
+      labels:
+        app: youtube-sauce
+    spec:
+      containers:
+      - name: youtube-sauce
+        image: your-aws-account.dkr.ecr.region.amazonaws.com/youtube-sauce:latest
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: youtube-sauce-config
+        - secretRef:
+            name: youtube-sauce-secrets
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: logs
+          mountPath: /usr/src/app/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: youtube-sauce
+spec:
+  selector:
+    app: youtube-sauce
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: youtube-sauce
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: youtube-sauce
+            port:
+              number: 80 

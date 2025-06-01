@@ -424,8 +424,8 @@ function showSubmitForm() {
                 Add Another Source
             </button>
             <div class="sauce-form-buttons">
-                <button onclick="submitSource()" class="sauce-submit">Submit</button>
-                <button onclick="this.closest('.sauce-submit-form').remove()" class="sauce-cancel">Cancel</button>
+                <button type="button" class="sauce-submit">Submit</button>
+                <button type="button" class="sauce-cancel">Cancel</button>
             </div>
         </div>
     `;
@@ -439,6 +439,13 @@ function showSubmitForm() {
     // Add click handler for the Add Another Source button
     const addSourceButton = form.querySelector('.sauce-add-source');
     addSourceButton.onclick = addNewSourceGroup;
+
+    // Add click handlers for submit and cancel buttons
+    const submitButton = form.querySelector('.sauce-submit');
+    const cancelButton = form.querySelector('.sauce-cancel');
+    
+    submitButton.addEventListener('click', submitSource);
+    cancelButton.addEventListener('click', () => form.remove());
 
     // Function to handle clicks outside the form
     function handleClickOutside(event) {
@@ -475,10 +482,73 @@ function addNewSourceGroup() {
     }
 }
 
+// Function to get current video details
+function getVideoDetails() {
+    const videoTitle = document.querySelector('h1.ytd-video-primary-info-renderer')?.textContent?.trim();
+    
+    // Try multiple selectors for the author name as YouTube's structure might vary
+    const authorElement = 
+        document.querySelector('#owner #channel-name a') || // Main channel name in video info
+        document.querySelector('ytd-video-owner-renderer a.yt-formatted-string') || // Alternative selector
+        document.querySelector('#upload-info .ytd-channel-name a') || // Another possible location
+        document.querySelector('#text.ytd-channel-name a'); // Yet another variation
+    
+    const author = authorElement?.textContent?.trim();
+    const videoId = new URLSearchParams(window.location.search).get('v');
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Add debug logging
+    console.log('Video Details Debug:', {
+        title: videoTitle,
+        author: author,
+        authorElement: authorElement,
+        videoId: videoId,
+        url: url,
+        possibleAuthorElements: {
+            selector1: document.querySelector('#owner #channel-name a')?.textContent,
+            selector2: document.querySelector('ytd-video-owner-renderer a.yt-formatted-string')?.textContent,
+            selector3: document.querySelector('#upload-info .ytd-channel-name a')?.textContent,
+            selector4: document.querySelector('#text.ytd-channel-name a')?.textContent
+        }
+    });
+
+    return {
+        title: videoTitle,
+        author: author,
+        videoId: videoId,
+        url: url
+    };
+}
+
 // Function to submit sources
 function submitSource() {
+    console.log('Starting source submission process...');
+    
     const form = document.querySelector('.sauce-submit-form');
+    if (!form) {
+        console.error('Submit form not found');
+        return;
+    }
+
+    // Get current video details first and log them
+    const videoDetails = getVideoDetails();
+    console.log('Current video details:', {
+        title: videoDetails.title,
+        author: videoDetails.author,
+        videoId: videoDetails.videoId,
+        url: videoDetails.url
+    });
+
+    // Validate video details
+    if (!videoDetails.videoId || !videoDetails.title || !videoDetails.author) {
+        console.error('Missing video details:', videoDetails);
+        alert('Error: Could not get complete video information. Please make sure you are on a valid YouTube video page.');
+        return;
+    }
+
     const sourceGroups = form.getElementsByClassName('sauce-source-group');
+    console.log(`Found ${sourceGroups.length} source groups`);
+    
     const sources = [];
 
     // Validate all timestamps before submitting
@@ -486,17 +556,24 @@ function submitSource() {
     for (const group of sourceGroups) {
         const fromInput = group.querySelector(`input[id^="source-timestamp-from"]`);
         const toInput = group.querySelector(`input[id^="source-timestamp-to"]`);
+        
+        console.log('Validating timestamps:', {
+            from: fromInput?.value,
+            to: toInput?.value
+        });
 
         if (fromInput.value || toInput.value) {
             const fromResult = validateTimestamp(fromInput.value);
             const toResult = validateTimestamp(toInput.value);
 
             if (!fromResult.isValid || !toResult.isValid) {
+                console.error('Timestamp validation failed:', { fromResult, toResult });
                 hasValidationErrors = true;
                 break;
             }
 
             if (!validateTimestampRange(fromResult.value, toResult.value)) {
+                console.error('Timestamp range validation failed');
                 hasValidationErrors = true;
                 break;
             }
@@ -515,36 +592,72 @@ function submitSource() {
         const timestampToInput = group.querySelector(`input[id^="source-timestamp-to"]`);
         const descInput = group.querySelector('.sauce-description-input');
         
+        console.log('Processing source group:', {
+            url: urlInput?.value,
+            from: timestampFromInput?.value,
+            to: timestampToInput?.value,
+            description: descInput?.value
+        });
+        
         if (urlInput.value.trim() && descInput.value.trim()) {
-            sources.push({
+            const sourceData = {
                 url: urlInput.value.trim(),
                 timestampFrom: timestampFromInput.value.trim(),
                 timestampTo: timestampToInput.value.trim(),
                 description: descInput.value.trim(),
-                submitTime: new Date().toISOString()
-            });
+                submitTime: new Date().toISOString(),
+                videoId: videoDetails.videoId,
+                videoTitle: videoDetails.title,
+                videoAuthor: videoDetails.author,
+                videoUrl: videoDetails.url
+            };
+            
+            console.log('Created source data object:', sourceData);
+            sources.push(sourceData);
         }
     }
 
     if (sources.length === 0) {
+        console.error('No valid sources found');
         alert('Please add at least one valid source with both URL and description.');
         return;
     }
 
-    const videoId = new URLSearchParams(window.location.search).get('v');
-    if (!videoId) return;
-
-    // Get existing sources from storage
-    browser.storage.local.get(videoId).then((result) => {
-        const existingSources = result[videoId] || [];
+    console.log('Final sources array:', sources);
+    
+    // Send to backend
+    fetch('http://localhost:3000/api/sources', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sources[0]) // Send first source for now
+    })
+    .then(response => {
+        console.log('Server response:', response);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Server success:', data);
+        // Save to local storage as well
+        return browser.storage.local.get(videoDetails.videoId);
+    })
+    .then((result) => {
+        const existingSources = result[videoDetails.videoId] || [];
         const updatedSources = existingSources.concat(sources);
+        console.log('Updating local storage with sources:', updatedSources);
         
-        // Save updated sources
-        browser.storage.local.set({ [videoId]: updatedSources }).then(() => {
-            loadSources();
-            updateSourceCount();
-            form.remove();
-        });
+        return browser.storage.local.set({ [videoDetails.videoId]: updatedSources });
+    })
+    .then(() => {
+        console.log('Source submission completed successfully');
+        loadSources();
+        updateSourceCount();
+        form.remove();
+    })
+    .catch((error) => {
+        console.error('Error during source submission:', error);
+        alert('Error submitting source. Please try again.');
     });
 }
 

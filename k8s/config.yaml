@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: youtube-sauce-config
+data:
+  PORT: "3000"
+  NODE_ENV: "production"
+  AWS_REGION: "eu-north-1"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  ALLOWED_ORIGINS: "http://localhost:3000,chrome-extension://your-extension-id"
+---
+# This is just a template. Actual secrets should be managed through AWS Secrets Manager
+# or created securely in the cluster
+apiVersion: v1
+kind: Secret
+metadata:
+  name: youtube-sauce-secrets
+type: Opaque
+data:
+  # These values should be base64 encoded in production
+  DB_HOST: "your-rds-endpoint-base64"
+  DB_USER: "youtubesauce-base64"
+  DB_PASSWORD: "your-password-base64"
+  DB_NAME: "youtubesauce-base64"
+  DB_PORT: "MzMwNg==" # 3306 in base64 
