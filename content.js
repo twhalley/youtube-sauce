@@ -104,12 +104,12 @@ function createSourceInputGroup(index, container) {
             ${index > 0 ? '<button type="button" class="sauce-remove-source" onclick="this.closest(\'.sauce-source-group\').remove()">Remove</button>' : ''}
         </div>
         <div class="sauce-input-group">
-            <label for="source-url-${index}">Original Video URL</label>
-            <input type="text" id="source-url-${index}" class="sauce-url-input" placeholder="https://www.youtube.com/watch?v=...">
+            <label for="source-url-${index}">Original URL</label>
+            <input type="text" id="source-url-${index}" class="sauce-url-input" placeholder="https://www.youtube.com/watch?v=... https://archive.is/ or https://kiwifarms.st/ etc ...">
         </div>
         <div class="sauce-input-group">
             <label for="source-description-${index}">Description</label>
-            <input type="text" id="source-description-${index}" class="sauce-description-input" placeholder="Brief description of the original content">
+            <input type="text" id="source-description-${index}" class="sauce-description-input" placeholder="Brief description of the original content, this can also include other links to the original content for example https://archive.is/ or https://kiwifarms.st/">
         </div>
     `;
     container.appendChild(group);
