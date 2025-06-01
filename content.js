@@ -137,8 +137,10 @@ function validateTimestamp(input) {
             let formattedTime = '';
             if (hours > 0) {
                 formattedTime = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            } else {
+            } else if (minutes > 0 || seconds > 0) {
                 formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                formattedTime = '0:00';
             }
 
             return { isValid: true, value: formattedTime };
@@ -175,32 +177,121 @@ function convertTimestampToSeconds(timestamp) {
     }
 }
 
+// Function to set timestamp from current video time
+function setTimestamp(type, index) {
+    console.log('setTimestamp called with:', type, index);
+    
+    const timestampInput = document.getElementById(`source-timestamp-${type}-${index}`);
+    console.log('Found input:', timestampInput);
+    
+    if (!timestampInput) {
+        console.error('Could not find timestamp input');
+        return;
+    }
+
+    // Find the error display element within the timestamp container
+    const timestampContainer = timestampInput.closest('.sauce-timestamp-container');
+    const errorDisplay = timestampContainer ? timestampContainer.nextElementSibling : null;
+    
+    if (!errorDisplay || !errorDisplay.classList.contains('sauce-timestamp-error')) {
+        console.error('Could not find error display element');
+        return;
+    }
+    
+    // Get the current value from the input
+    const timestamp = timestampInput.value.trim();
+    console.log('Current timestamp value:', timestamp);
+    
+    // Clear previous error states
+    timestampInput.classList.remove('sauce-input-error');
+    errorDisplay.style.display = 'none';
+    errorDisplay.textContent = '';
+
+    // Validate the timestamp
+    const result = validateTimestamp(timestamp);
+    console.log('Validation result:', result);
+    
+    if (!result.isValid) {
+        errorDisplay.textContent = result.error;
+        errorDisplay.style.display = 'block';
+        timestampInput.classList.add('sauce-input-error');
+        return;
+    }
+
+    // Get the other input for range validation
+    const otherType = type === 'from' ? 'to' : 'from';
+    const otherInput = document.getElementById(`source-timestamp-${otherType}-${index}`);
+    console.log('Other input:', otherInput);
+
+    // Validate range if both inputs have values
+    if (otherInput && otherInput.value) {
+        const fromTime = type === 'from' ? result.value : otherInput.value;
+        const toTime = type === 'to' ? result.value : otherInput.value;
+        
+        const fromSeconds = convertTimestampToSeconds(fromTime);
+        const toSeconds = convertTimestampToSeconds(toTime);
+        console.log('Time range validation:', { fromSeconds, toSeconds });
+
+        if (fromSeconds > toSeconds) {
+            timestampInput.classList.add('sauce-input-error');
+            otherInput.classList.add('sauce-input-error');
+            errorDisplay.textContent = 'End time must be after start time';
+            errorDisplay.style.display = 'block';
+            return;
+        }
+    }
+
+    // Set the formatted timestamp and make input read-only
+    timestampInput.value = result.value;
+    timestampInput.setAttribute('readonly', '');
+    timestampInput.classList.add('sauce-timestamp-set');
+    console.log('Timestamp set and locked:', result.value);
+}
+
 // Add input validation to timestamp fields
 function addTimestampValidation(index) {
     const fromInput = document.getElementById(`source-timestamp-from-${index}`);
     const toInput = document.getElementById(`source-timestamp-to-${index}`);
-    const errorDisplay = document.createElement('div');
-    errorDisplay.className = 'sauce-timestamp-error';
-    fromInput.parentNode.appendChild(errorDisplay);
+    const errorDisplay = fromInput.parentNode.parentNode.parentNode.querySelector('.sauce-timestamp-error');
+    let validationTimeout;
 
-    function validateAndUpdateTimestamp(input) {
-        const result = validateTimestamp(input.value);
-        const otherInput = input === fromInput ? toInput : fromInput;
-        
-        // Clear previous error state
+    function validateAndUpdateTimestamp(input, immediate = false) {
+        // Clear any existing timeout
+        if (validationTimeout) {
+            clearTimeout(validationTimeout);
+        }
+
+        // Remove error states immediately when user starts typing
         input.classList.remove('sauce-input-error');
         errorDisplay.textContent = '';
         errorDisplay.style.display = 'none';
 
-        if (!result.isValid) {
+        // If immediate validation is requested (e.g., on blur or submit)
+        if (immediate) {
+            performValidation(input);
+        } else {
+            // Set a new timeout for validation
+            validationTimeout = setTimeout(() => {
+                performValidation(input);
+            }, 1000); // Wait 1 second after user stops typing
+        }
+    }
+
+    function performValidation(input) {
+        const result = validateTimestamp(input.value);
+        const otherInput = input === fromInput ? toInput : fromInput;
+
+        if (!result.isValid && input.value !== '') {
             input.classList.add('sauce-input-error');
             errorDisplay.textContent = result.error;
             errorDisplay.style.display = 'block';
             return false;
         }
 
-        // Update input with formatted value
-        input.value = result.value;
+        // Update input with formatted value if valid
+        if (result.isValid && input.value !== '') {
+            input.value = result.value;
+        }
 
         // Validate range if both inputs have values
         if (input.value && otherInput.value) {
@@ -217,13 +308,13 @@ function addTimestampValidation(index) {
         return true;
     }
 
-    // Add validation on input
-    fromInput.addEventListener('input', () => validateAndUpdateTimestamp(fromInput));
-    toInput.addEventListener('input', () => validateAndUpdateTimestamp(toInput));
+    // Add validation on input (with delay)
+    fromInput.addEventListener('input', () => validateAndUpdateTimestamp(fromInput, false));
+    toInput.addEventListener('input', () => validateAndUpdateTimestamp(toInput, false));
 
-    // Add validation on blur (when input loses focus)
-    fromInput.addEventListener('blur', () => validateAndUpdateTimestamp(fromInput));
-    toInput.addEventListener('blur', () => validateAndUpdateTimestamp(toInput));
+    // Add immediate validation on blur
+    fromInput.addEventListener('blur', () => validateAndUpdateTimestamp(fromInput, true));
+    toInput.addEventListener('blur', () => validateAndUpdateTimestamp(toInput, true));
 }
 
 // Function to create a source input group
@@ -239,14 +330,14 @@ function createSourceInputGroup(index, container) {
             <label for="source-url-${index}">Original URL</label>
             <textarea id="source-url-${index}" class="sauce-url-input" rows="8" placeholder="Paste your source URL here. Examples:
 
-YouTube: https://www.youtube.com/watch?v=...
-Twitter/X: https://twitter.com/username/status/...
-Nitter: https://nitter.net/username/status/...
-Reddit: https://reddit.com/r/subreddit/comments/...
-Archive.is: https://archive.is/...
-Web Archive: https://web.archive.org/web/...
-Odysee: https://odysee.com/@channel/...
-Rumble: https://rumble.com/..."></textarea>
+https://www.youtube.com/watch?v=...
+https://twitter.com/username/status/...
+https://nitter.net/username/status/...
+https://reddit.com/r/subreddit/comments/...
+https://archive.is/...
+https://web.archive.org/web/...
+https://odysee.com/@channel/...
+https://rumble.com/..."></textarea>
         </div>
         <div class="sauce-input-group">
             <label>Timestamp Range in Current Video</label>
@@ -255,15 +346,16 @@ Rumble: https://rumble.com/..."></textarea>
                     <div class="sauce-timestamp-field">
                         <label for="source-timestamp-from-${index}">From:</label>
                         <input type="text" id="source-timestamp-from-${index}" class="sauce-timestamp-input" placeholder="0:00">
-                        <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp('from', ${index})">Get Current</button>
+                        <button type="button" class="sauce-set-timestamp" data-type="from" data-index="${index}">Lock</button>
                     </div>
                     <div class="sauce-timestamp-field">
                         <label for="source-timestamp-to-${index}">To:</label>
                         <input type="text" id="source-timestamp-to-${index}" class="sauce-timestamp-input" placeholder="0:00">
-                        <button type="button" class="sauce-fetch-timestamp" onclick="fetchCurrentTimestamp('to', ${index})">Get Current</button>
+                        <button type="button" class="sauce-set-timestamp" data-type="to" data-index="${index}">Lock</button>
                     </div>
                 </div>
             </div>
+            <div class="sauce-timestamp-error"></div>
         </div>
         <div class="sauce-input-group">
             <label for="source-description-${index}">Description</label>
@@ -277,32 +369,20 @@ Rumble: https://rumble.com/..."></textarea>
 - Original social media post"></textarea>
         </div>
     `;
+    
+    // Add click handlers for the lock buttons
+    const lockButtons = group.querySelectorAll('.sauce-set-timestamp');
+    lockButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const type = this.dataset.type;
+            const index = parseInt(this.dataset.index);
+            console.log('Lock button clicked:', { type, index });
+            setTimestamp(type, index);
+        });
+    });
+
     container.appendChild(group);
     addTimestampValidation(index);
-}
-
-// Function to fetch and format current video timestamp
-function fetchCurrentTimestamp(type, index) {
-    // Find the YouTube video player
-    const video = document.querySelector('#movie_player video');
-    if (video) {
-        const time = Math.floor(video.currentTime);
-        const hours = Math.floor(time / 3600);
-        const minutes = Math.floor((time % 3600) / 60);
-        const seconds = time % 60;
-        
-        let timestamp = '';
-        if (hours > 0) {
-            timestamp = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        } else {
-            timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-        
-        const timestampInput = document.getElementById(`source-timestamp-${type}-${index}`);
-        if (timestampInput) {
-            timestampInput.value = timestamp;
-        }
-    }
 }
 
 // Function to show the submit form
@@ -513,7 +593,8 @@ function observeThemeChanges() {
 // Make functions available globally
 window.addNewSourceGroup = addNewSourceGroup;
 window.submitSource = submitSource;
-window.fetchCurrentTimestamp = fetchCurrentTimestamp;
+window.validateTimestamp = validateTimestamp;
+window.convertTimestampToSeconds = convertTimestampToSeconds;
 
 // Initialize when the page loads
 document.addEventListener('yt-navigate-finish', createSauceMenu);

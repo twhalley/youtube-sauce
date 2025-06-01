@@ -484,10 +484,20 @@ html[dark] .sauce-timestamp-field label {
     height: 36px;
 }
 
+/* Styles for when timestamp is set */
+.sauce-timestamp-input[readonly] {
+    background-color: #f8f8f8;
+    cursor: default;
+}
+
 html[dark] .sauce-timestamp-input {
     background-color: #1f1f1f;
     border-color: #404040;
     color: #fff;
+}
+
+html[dark] .sauce-timestamp-input[readonly] {
+    background-color: #282828;
 }
 
 .sauce-timestamp-input:focus {
@@ -495,8 +505,24 @@ html[dark] .sauce-timestamp-input {
     outline: none;
 }
 
+.sauce-timestamp-input[readonly]:focus {
+    border-color: #d3d3d3;
+}
+
 html[dark] .sauce-timestamp-input:focus {
     border-color: #3ea6ff;
+}
+
+html[dark] .sauce-timestamp-input[readonly]:focus {
+    border-color: #404040;
+}
+
+.sauce-timestamp-input::placeholder {
+    color: #909090;
+}
+
+html[dark] .sauce-timestamp-input::placeholder {
+    color: #666;
 }
 
 .sauce-fetch-timestamp {
@@ -548,6 +574,65 @@ html[dark] .sauce-video-timestamp {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.sauce-timestamp-error {
+    display: none;
+    color: #cc0000;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(204, 0, 0, 0.1);
+}
+
+html[dark] .sauce-timestamp-error {
+    color: #ff4e45;
+    background-color: rgba(255, 78, 69, 0.1);
+}
+
+.sauce-input-error {
+    border-color: #cc0000 !important;
+    background-color: rgba(204, 0, 0, 0.05) !important;
+}
+
+html[dark] .sauce-input-error {
+    border-color: #ff4e45 !important;
+    background-color: rgba(255, 78, 69, 0.05) !important;
+}
+
+.sauce-input-error:focus {
+    border-color: #cc0000 !important;
+}
+
+html[dark] .sauce-input-error:focus {
+    border-color: #ff4e45 !important;
+}
+
+.sauce-set-timestamp {
+    background-color: #065fd4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    height: 36px;
+    white-space: nowrap;
+    min-width: 60px;
+}
+
+html[dark] .sauce-set-timestamp {
+    background-color: #3ea6ff;
+}
+
+.sauce-set-timestamp:hover {
+    background-color: #0356c6;
+}
+
+html[dark] .sauce-set-timestamp:hover {
+    background-color: #65b8ff;
 }
 
 .sauce-timestamp-error {
