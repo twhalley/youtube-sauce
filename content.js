@@ -177,6 +177,15 @@ function addNewSourceGroup() {
     const container = document.getElementById('sauce-sources-container');
     const currentCount = container.getElementsByClassName('sauce-source-group').length;
     createSourceInputGroup(currentCount, container);
+    
+    // Get the form content container and scroll to the bottom
+    const formContent = document.querySelector('.sauce-submit-form-content');
+    if (formContent) {
+        // Use requestAnimationFrame to ensure the DOM has updated
+        requestAnimationFrame(() => {
+            formContent.scrollTop = formContent.scrollHeight;
+        });
+    }
 }
 
 // Function to submit sources
