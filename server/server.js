@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const winston = require('winston');
 
 // Initialize logger with AWS CloudWatch format
@@ -60,36 +60,29 @@ app.get('/health', (req, res) => {
 });
 
 // Database connection pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
+const pool = new Pool({
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
+  password: process.env.DB_PASSWORD,
+  port: parseInt(process.env.DB_PORT) || 5432,
   ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: true,
-    // For AWS RDS SSL configuration
     ca: process.env.SSL_CA || require('fs').readFileSync('./rds-ca-2019-root.pem')
   } : false,
-  // RDS specific configurations
-  connectTimeout: 20000, // Increase connection timeout for RDS
-  maxIdle: 10, // Max idle connections to maintain
-  idleTimeout: 60000, // Idle connection timeout
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 20000,
 });
 
 // Test database connection on startup
 async function testDatabaseConnection() {
   try {
-    const connection = await pool.getConnection();
-    logger.info('Successfully connected to RDS database');
-    connection.release();
+    const client = await pool.connect();
+    logger.info('Successfully connected to PostgreSQL database');
+    client.release();
   } catch (error) {
-    logger.error('Failed to connect to RDS database:', {
+    logger.error('Failed to connect to PostgreSQL database:', {
       error: error.message,
       stack: error.stack
     });
@@ -98,6 +91,41 @@ async function testDatabaseConnection() {
 }
 
 testDatabaseConnection();
+
+// Create tables if they don't exist
+async function initializeDatabase() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sources (
+        id SERIAL PRIMARY KEY,
+        video_id VARCHAR(11) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        author VARCHAR(100) NOT NULL,
+        url VARCHAR(2048) NOT NULL,
+        timestamp_from VARCHAR(20),
+        timestamp_to VARCHAR(20),
+        description TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_video_id ON sources(video_id);
+      CREATE INDEX IF NOT EXISTS idx_created_at ON sources(created_at);
+    `);
+    logger.info('Database tables initialized successfully');
+  } catch (error) {
+    logger.error('Error initializing database tables:', {
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+initializeDatabase();
 
 // Input validation middleware
 const validateSourceSubmission = [
@@ -118,9 +146,9 @@ const validateSourceSubmission = [
     .isLength({ max: 1000 }).withMessage('Description too long')
 ];
 
-// Submit source endpoint with improved error handling for RDS
+// Submit source endpoint
 app.post('/api/sources', validateSourceSubmission, async (req, res) => {
-  let connection;
+  const client = await pool.connect();
   try {
     // Check for validation errors
     const errors = validationResult(req);
@@ -130,76 +158,50 @@ app.post('/api/sources', validateSourceSubmission, async (req, res) => {
 
     const { videoId, title, author, url, timestampFrom, timestampTo, description } = req.body;
 
-    // Get a connection from the pool
-    connection = await pool.getConnection();
-
     // Start transaction
-    await connection.beginTransaction();
+    await client.query('BEGIN');
 
-    // Prepare SQL statement
-    const sql = `
-      INSERT INTO sources (
+    // Insert source
+    const result = await client.query(
+      `INSERT INTO sources (
         video_id, title, author, url, timestamp_from, 
-        timestamp_to, description, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-    `;
-
-    // Execute query with prepared statement
-    const [result] = await connection.execute(sql, [
-      videoId,
-      title,
-      author,
-      url,
-      timestampFrom || null,
-      timestampTo || null,
-      description
-    ]);
+        timestamp_to, description, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id`,
+      [videoId, title, author, url, timestampFrom || null, timestampTo || null, description]
+    );
 
     // Commit transaction
-    await connection.commit();
+    await client.query('COMMIT');
 
-    logger.info('Source submitted successfully to RDS', {
+    logger.info('Source submitted successfully to PostgreSQL', {
       videoId,
-      sourceId: result.insertId,
+      sourceId: result.rows[0].id,
       region: process.env.AWS_REGION
     });
 
     res.status(201).json({
       message: 'Source submitted successfully',
-      sourceId: result.insertId
+      sourceId: result.rows[0].id
     });
 
   } catch (error) {
     // Rollback transaction if there was an error
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        logger.error('Error rolling back transaction', {
-          error: rollbackError.message,
-          stack: rollbackError.stack
-        });
-      }
-    }
+    await client.query('ROLLBACK');
 
-    logger.error('Error submitting source to RDS', {
+    logger.error('Error submitting source to PostgreSQL', {
       error: error.message,
       stack: error.stack,
       code: error.code,
-      sqlState: error.sqlState,
       region: process.env.AWS_REGION
     });
 
-    // Handle specific RDS errors
-    if (error.code === 'ER_CON_COUNT_ERROR') {
+    // Handle specific PostgreSQL errors
+    if (error.code === '53300') { // too many connections
       return res.status(503).json({
         error: 'Database connection limit reached. Please try again later.'
       });
-    } else if (error.code === 'PROTOCOL_CONNECTION_LOST') {
-      return res.status(503).json({
-        error: 'Database connection was lost. Please try again.'
-      });
-    } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+    } else if (error.code === '28P01') { // invalid password
       return res.status(503).json({
         error: 'Database access denied. Please contact support.'
       });
@@ -209,18 +211,15 @@ app.post('/api/sources', validateSourceSubmission, async (req, res) => {
       error: 'An error occurred while submitting the source'
     });
   } finally {
-    // Always release the connection back to the pool
-    if (connection) {
-      connection.release();
-    }
+    client.release();
   }
 });
 
-// Get sources endpoint with improved RDS error handling
+// Get sources endpoint
 app.get('/api/sources/:videoId', [
   body('videoId').trim().matches(/^[a-zA-Z0-9_-]{11}$/).withMessage('Invalid YouTube video ID')
 ], async (req, res) => {
-  let connection;
+  const client = await pool.connect();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -229,27 +228,22 @@ app.get('/api/sources/:videoId', [
 
     const { videoId } = req.params;
 
-    // Get a connection from the pool
-    connection = await pool.getConnection();
-
-    const [sources] = await connection.execute(
-      'SELECT * FROM sources WHERE video_id = ? ORDER BY created_at DESC',
+    const result = await client.query(
+      'SELECT * FROM sources WHERE video_id = $1 ORDER BY created_at DESC',
       [videoId]
     );
 
-    res.json(sources);
+    res.json(result.rows);
 
   } catch (error) {
-    logger.error('Error fetching sources from RDS', {
+    logger.error('Error fetching sources from PostgreSQL', {
       error: error.message,
       stack: error.stack,
       code: error.code,
-      sqlState: error.sqlState,
       region: process.env.AWS_REGION
     });
 
-    // Handle specific RDS errors
-    if (error.code === 'ER_CON_COUNT_ERROR') {
+    if (error.code === '53300') { // too many connections
       return res.status(503).json({
         error: 'Database connection limit reached. Please try again later.'
       });
@@ -259,10 +253,7 @@ app.get('/api/sources/:videoId', [
       error: 'An error occurred while fetching sources'
     });
   } finally {
-    // Always release the connection back to the pool
-    if (connection) {
-      connection.release();
-    }
+    client.release();
   }
 });
 
