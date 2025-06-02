@@ -4,10 +4,9 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
-const { Pool } = require('pg');
 const winston = require('winston');
 
-// Initialize logger with AWS CloudWatch format
+// Initialize logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -16,16 +15,11 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'youtube-sauce' },
   transports: [
-    new winston.transports.File({ filename: '/usr/src/app/logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: '/usr/src/app/logs/combined.log' })
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
   ]
 });
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
 
 const app = express();
 
@@ -33,7 +27,7 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',');
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'];
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -54,78 +48,10 @@ app.use(limiter);
 // Body parser middleware
 app.use(express.json());
 
-// Health check endpoint for Kubernetes probes
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
-
-// Database connection pool
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT) || 5432,
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: true,
-    ca: process.env.SSL_CA || require('fs').readFileSync('./rds-ca-2019-root.pem')
-  } : false,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 20000,
-});
-
-// Test database connection on startup
-async function testDatabaseConnection() {
-  try {
-    const client = await pool.connect();
-    logger.info('Successfully connected to PostgreSQL database');
-    client.release();
-  } catch (error) {
-    logger.error('Failed to connect to PostgreSQL database:', {
-      error: error.message,
-      stack: error.stack
-    });
-    process.exit(1);
-  }
-}
-
-testDatabaseConnection();
-
-// Create tables if they don't exist
-async function initializeDatabase() {
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS sources (
-        id SERIAL PRIMARY KEY,
-        video_id VARCHAR(11) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        author VARCHAR(100) NOT NULL,
-        url VARCHAR(2048) NOT NULL,
-        timestamp_from VARCHAR(20),
-        timestamp_to VARCHAR(20),
-        description TEXT NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_video_id ON sources(video_id);
-      CREATE INDEX IF NOT EXISTS idx_created_at ON sources(created_at);
-    `);
-    logger.info('Database tables initialized successfully');
-  } catch (error) {
-    logger.error('Error initializing database tables:', {
-      error: error.message,
-      stack: error.stack
-    });
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-initializeDatabase();
 
 // Input validation middleware
 const validateSourceSubmission = [
@@ -147,8 +73,7 @@ const validateSourceSubmission = [
 ];
 
 // Submit source endpoint
-app.post('/api/sources', validateSourceSubmission, async (req, res) => {
-  const client = await pool.connect();
+app.post('/api/sources', validateSourceSubmission, (req, res) => {
   try {
     // Check for validation errors
     const errors = validationResult(req);
@@ -156,70 +81,32 @@ app.post('/api/sources', validateSourceSubmission, async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { videoId, title, author, url, timestampFrom, timestampTo, description } = req.body;
-
-    // Start transaction
-    await client.query('BEGIN');
-
-    // Insert source
-    const result = await client.query(
-      `INSERT INTO sources (
-        video_id, title, author, url, timestamp_from, 
-        timestamp_to, description, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING id`,
-      [videoId, title, author, url, timestampFrom || null, timestampTo || null, description]
-    );
-
-    // Commit transaction
-    await client.query('COMMIT');
-
-    logger.info('Source submitted successfully to PostgreSQL', {
-      videoId,
-      sourceId: result.rows[0].id,
-      region: process.env.AWS_REGION
+    // Log the received data
+    logger.info('Received source submission:', {
+      body: req.body
     });
 
     res.status(201).json({
-      message: 'Source submitted successfully',
-      sourceId: result.rows[0].id
+      message: 'Source received successfully',
+      source: req.body
     });
 
   } catch (error) {
-    // Rollback transaction if there was an error
-    await client.query('ROLLBACK');
-
-    logger.error('Error submitting source to PostgreSQL', {
+    logger.error('Error processing source submission:', {
       error: error.message,
-      stack: error.stack,
-      code: error.code,
-      region: process.env.AWS_REGION
+      stack: error.stack
     });
-
-    // Handle specific PostgreSQL errors
-    if (error.code === '53300') { // too many connections
-      return res.status(503).json({
-        error: 'Database connection limit reached. Please try again later.'
-      });
-    } else if (error.code === '28P01') { // invalid password
-      return res.status(503).json({
-        error: 'Database access denied. Please contact support.'
-      });
-    }
 
     res.status(500).json({
-      error: 'An error occurred while submitting the source'
+      error: 'An error occurred while processing the source'
     });
-  } finally {
-    client.release();
   }
 });
 
 // Get sources endpoint
 app.get('/api/sources/:videoId', [
   body('videoId').trim().matches(/^[a-zA-Z0-9_-]{11}$/).withMessage('Invalid YouTube video ID')
-], async (req, res) => {
-  const client = await pool.connect();
+], (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -227,50 +114,25 @@ app.get('/api/sources/:videoId', [
     }
 
     const { videoId } = req.params;
-
-    const result = await client.query(
-      'SELECT * FROM sources WHERE video_id = $1 ORDER BY created_at DESC',
-      [videoId]
-    );
-
-    res.json(result.rows);
-
-  } catch (error) {
-    logger.error('Error fetching sources from PostgreSQL', {
-      error: error.message,
-      stack: error.stack,
-      code: error.code,
-      region: process.env.AWS_REGION
+    
+    // Log the request
+    logger.info('Received request for sources:', {
+      videoId
     });
 
-    if (error.code === '53300') { // too many connections
-      return res.status(503).json({
-        error: 'Database connection limit reached. Please try again later.'
-      });
-    }
+    // Return empty array since we're not storing data
+    res.json([]);
+
+  } catch (error) {
+    logger.error('Error processing sources request:', {
+      error: error.message,
+      stack: error.stack
+    });
 
     res.status(500).json({
       error: 'An error occurred while fetching sources'
     });
-  } finally {
-    client.release();
   }
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received. Starting graceful shutdown...');
-  
-  // Close the HTTP server
-  server.close(() => {
-    logger.info('HTTP server closed.');
-    
-    // Close the database pool
-    pool.end().then(() => {
-      logger.info('Database connections closed.');
-      process.exit(0);
-    });
-  });
 });
 
 // Start server

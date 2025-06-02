@@ -1,0 +1,184 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVpc",
+                "ec2:CreateSubnet",
+                "ec2:CreateInternetGateway",
+                "ec2:CreateRouteTable",
+                "ec2:CreateRoute",
+                "ec2:CreateSecurityGroup",
+                "ec2:CreateTags",
+                "ec2:AttachInternetGateway",
+                "ec2:AssociateRouteTable",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:AuthorizeSecurityGroupEgress",
+                "ec2:DeleteVpc",
+                "ec2:DeleteSubnet",
+                "ec2:DeleteInternetGateway",
+                "ec2:DeleteRouteTable",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DetachInternetGateway",
+                "ec2:DisassociateRouteTable",
+                "ec2:RevokeSecurityGroupIngress",
+                "ec2:RevokeSecurityGroupEgress",
+                "ec2:DescribeVpcs",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeInternetGateways",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:ModifyVpcAttribute",
+                "ec2:DescribeVpcAttribute"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateDBInstance",
+                "rds:DeleteDBInstance",
+                "rds:DescribeDBInstances",
+                "rds:ModifyDBInstance",
+                "rds:CreateDBSubnetGroup",
+                "rds:DeleteDBSubnetGroup",
+                "rds:DescribeDBSubnetGroups",
+                "rds:AddTagsToResource",
+                "rds:ListTagsForResource",
+                "rds:DescribeDBEngineVersions"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListInstanceProfilesForRole",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:CreateUser",
+                "iam:DeleteUser",
+                "iam:GetUser",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions",
+                "iam:AttachUserPolicy",
+                "iam:DetachUserPolicy",
+                "iam:CreateAccessKey",
+                "iam:DeleteAccessKey",
+                "iam:ListAccessKeys",
+                "iam:TagUser",
+                "iam:TagRole",
+                "iam:ListRoleTags",
+                "iam:ListUserTags",
+                "iam:GetUserPolicy",
+                "iam:ListAttachedUserPolicies",
+                "iam:ListUserPolicies"
+            ],
+            "Resource": [
+                "arn:aws:iam::871359157979:role/*",
+                "arn:aws:iam::871359157979:user/*",
+                "arn:aws:iam::871359157979:policy/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": [
+                "arn:aws:iam::871359157979:role/youtube-sauce-rds-monitoring-role"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "iam:PassedToService": [
+                        "monitoring.rds.amazonaws.com",
+                        "rds.amazonaws.com"
+                    ]
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecr:CreateRepository",
+                "ecr:DeleteRepository",
+                "ecr:DescribeRepositories",
+                "ecr:PutLifecyclePolicy",
+                "ecr:DeleteLifecyclePolicy",
+                "ecr:GetLifecyclePolicy",
+                "ecr:TagResource",
+                "ecr:ListTagsForResource",
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchGetImage",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:CompleteLayerUpload",
+                "ecr:InitiateLayerUpload",
+                "ecr:PutImage",
+                "ecr:UploadLayerPart",
+                "ecr:DescribeImages"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:CreateSecret",
+                "secretsmanager:DeleteSecret",
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:PutSecretValue",
+                "secretsmanager:UpdateSecret",
+                "secretsmanager:TagResource",
+                "secretsmanager:DescribeSecret",
+                "secretsmanager:ListSecretVersionIds",
+                "secretsmanager:GetResourcePolicy",
+                "secretsmanager:PutResourcePolicy",
+                "secretsmanager:DeleteResourcePolicy",
+                "secretsmanager:RestoreSecret"
+            ],
+            "Resource": [
+                "arn:aws:secretsmanager:*:871359157979:secret:youtube-sauce/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::youtube-sauce-terraform-state",
+                "arn:aws:s3:::youtube-sauce-terraform-state/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:DeleteItem"
+            ],
+            "Resource": "arn:aws:dynamodb:*:871359157979:table/youtube-sauce-terraform-lock"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::*:role/aws-service-role/rds.amazonaws.com/*",
+            "Condition": {
+                "StringLike": {
+                    "iam:AWSServiceName": "rds.amazonaws.com"
+                }
+            }
+        }
+    ]
+} 
